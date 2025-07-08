@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>リアルタイム為替コンバーター</title>
+    <!-- Tailwind CSSを読み込み -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts (Inter) を読み込み -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        /* 日本語フォントと英語フォントの指定 */
+        body {
+            font-family: 'Inter', 'Noto Sans JP', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 flex items-center justify-center min-h-screen py-10">
+
+    <div class="w-full max-w-md mx-auto bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 md:p-8">
+        <div class="text-center mb-8">
+            <h1 class="text-2xl md:text-3xl font-bold text-gray-800 dark:text-white">為替コンバーター</h1>
+            <p class="text-gray-500 dark:text-gray-400 mt-2">最新レートで通貨を換算します</p>
+        </div>
+
+        <!-- 入力フォーム -->
+        <div class="space-y-6">
+            <!-- 金額入力 -->
+            <div>
+                <label for="amount" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">金額</label>
+                <input type="number" id="amount" name="amount" value="100" class="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-200" placeholder="金額を入力">
+            </div>
+
+            <!-- 通貨選択 -->
+            <div class="flex items-center justify-between space-x-2 md:space-x-4">
+                <div class="w-full">
+                    <label for="from-currency" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">換算元</label>
+                    <select id="from-currency" name="from-currency" class="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-200"></select>
+                </div>
+                <div class="pt-8">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+                </div>
+                <div class="w-full">
+                    <label for="to-currency" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">換算先</label>
+                    <select id="to-currency" name="to-currency" class="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-200"></select>
+                </div>
+            </div>
+            
+            <!-- 手数料選択 -->
+            <div>
+                <label for="fee-rate" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">換金手数料</label>
+                <select id="fee-rate" name="fee-rate" class="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-200"></select>
+            </div>
+
+            <!-- 換算ボタン -->
+            <div>
+                <button id="convert-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg focus:outline-none focus:ring-4 focus:ring-blue-300 dark:focus:ring-blue-800 transition-all duration-300 ease-in-out transform hover:scale-105">
+                    <span id="btn-text">換算する</span>
+                    <span id="btn-loader" class="hidden">換算中...</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- 結果表示エリア -->
+        <div id="result-container" class="mt-8 text-left p-4 bg-gray-50 dark:bg-gray-700 rounded-lg min-h-[150px]">
+             <div id="result-text" class="space-y-2"></div>
+             <p id="error-text" class="text-lg font-medium text-red-500 dark:text-red-400"></p>
+        </div>
+        
+        <!-- レート情報 -->
+        <div class="text-center mt-4">
+            <p id="rate-info" class="text-xs text-gray-400 dark:text-gray-500">レートは open.er-api.com より取得</p>
+        </div>
+    </div>
+
+    <script>
+        // 主要通貨のリスト
+        const majorCurrencies = { "JPY": "日本円", "USD": "米ドル", "EUR": "ユーロ", "GBP": "英ポンド", "AUD": "豪ドル", "CAD": "カナダドル", "CHF": "スイスフラン", "CNY": "中国人民元", "HKD": "香港ドル", "NZD": "ニュージーランドドル" };
+
+        // DOM要素の取得
+        const amountInput = document.getElementById('amount');
+        const fromCurrencySelect = document.getElementById('from-currency');
+        const toCurrencySelect = document.getElementById('to-currency');
+        const feeRateSelect = document.getElementById('fee-rate');
+        const convertBtn = document.getElementById('convert-btn');
+        const btnText = document.getElementById('btn-text');
+        const btnLoader = document.getElementById('btn-loader');
+        const resultText = document.getElementById('result-text');
+        const errorText = document.getElementById('error-text');
+
+        /**
+         * プルダウンを初期化する
+         */
+        function initializeDropdowns() {
+            // 通貨プルダウン
+            for (const code in majorCurrencies) {
+                const optionFrom = document.createElement('option');
+                optionFrom.value = code;
+                optionFrom.textContent = `${code} - ${majorCurrencies[code]}`;
+                fromCurrencySelect.appendChild(optionFrom);
+
+                const optionTo = document.createElement('option');
+                optionTo.value = code;
+                optionTo.textContent = `${code} - ${majorCurrencies[code]}`;
+                toCurrencySelect.appendChild(optionTo);
+            }
+            fromCurrencySelect.value = 'USD';
+            toCurrencySelect.value = 'JPY';
+
+            // ★変更: 手数料プルダウン (0%から開始)
+            for (let i = 0.0; i <= 8.0; i += 0.5) {
+                const option = document.createElement('option');
+                const feeValue = i.toFixed(1);
+                option.value = feeValue;
+                option.textContent = `${feeValue}%`;
+                feeRateSelect.appendChild(option);
+            }
+            // デフォルトを0.0%に設定
+            feeRateSelect.value = '0.0';
+        }
+
+        /**
+         * 通貨換算を実行する
+         */
+        async function convertCurrency() {
+            const amount = parseFloat(amountInput.value);
+            const fromCurrency = fromCurrencySelect.value;
+            const toCurrency = toCurrencySelect.value;
+            const feeRate = parseFloat(feeRateSelect.value) / 100;
+
+            if (isNaN(amount) || amount <= 0) {
+                showError('有効な金額を入力してください。');
+                return;
+            }
+
+            setLoading(true);
+            clearMessages();
+
+            try {
+                const response = await fetch(`https://open.er-api.com/v6/latest/${fromCurrency}`);
+                if (!response.ok) throw new Error('為替レートの取得に失敗しました。');
+                
+                const data = await response.json();
+                if (data.result === 'error') throw new Error(`APIエラー: ${data['error-type']}`);
+
+                const rate = data.rates[toCurrency];
+                if (!rate) throw new Error('換算先通貨のレートが見つかりません。');
+                
+                const convertedAmount = amount * rate;
+                const feeAmount = convertedAmount * feeRate;
+                const finalAmount = convertedAmount - feeAmount;
+                const timestamp = new Date();
+
+                displayResult(amount, fromCurrency, convertedAmount, toCurrency, timestamp, feeRate, feeAmount, finalAmount);
+
+            } catch (error) {
+                console.error('換算エラー:', error);
+                showError('レートの取得中にエラーが発生しました。時間をおいて再試行してください。');
+            } finally {
+                setLoading(false);
+            }
+        }
+        
+        /**
+         * 結果を表示する
+         */
+        function displayResult(amount, from, convertedAmount, to, timestamp, feeRate, feeAmount, finalAmount) {
+            const formatCurrency = (value, currency) => new Intl.NumberFormat('ja-JP', { style: 'currency', currency: currency, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
+
+            const timestampFormatted = new Intl.DateTimeFormat('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(timestamp);
+
+            resultText.innerHTML = `
+                <div class="text-sm text-gray-600 dark:text-gray-300">
+                    <p>換算額: <span class="font-semibold">${formatCurrency(convertedAmount, to)}</span></p>
+                    <p>手数料 (${(feeRate * 100).toFixed(1)}%): <span class="font-semibold text-red-500 dark:text-red-400">- ${formatCurrency(feeAmount, to)}</span></p>
+                </div>
+                <hr class="my-2 border-gray-200 dark:border-gray-600">
+                <div class="text-lg text-gray-800 dark:text-white">
+                    <p>最終受取額: <span class="font-bold text-xl">${formatCurrency(finalAmount, to)}</span></p>
+                </div>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-3 text-right">(${timestampFormatted} 時点)</p>
+            `;
+        }
+
+        function showError(message) {
+            clearMessages();
+            errorText.textContent = message;
+        }
+
+        function clearMessages() {
+            resultText.innerHTML = '';
+            errorText.textContent = '';
+        }
+
+        function setLoading(isLoading) {
+            convertBtn.disabled = isLoading;
+            btnText.classList.toggle('hidden', isLoading);
+            btnLoader.classList.toggle('hidden', !isLoading);
+        }
+
+        // イベントリスナーの設定
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeDropdowns();
+            convertCurrency();
+        });
+        convertBtn.addEventListener('click', convertCurrency);
+        // 入力値が変更されたら再計算
+        amountInput.addEventListener('change', convertCurrency);
+        fromCurrencySelect.addEventListener('change', convertCurrency);
+        toCurrencySelect.addEventListener('change', convertCurrency);
+        feeRateSelect.addEventListener('change', convertCurrency);
+
+    </script>
+</body>
+</html>
